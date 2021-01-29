@@ -187,6 +187,8 @@ void updateMouth() {
     if (cycleComplete) {
       //make a local copy of the value from the interrupt to prevent "issues"
       uint8_t jaw = jawValue;
+      Serial.print("J: ");
+      Serial.print(jaw);
 
       //clear the flag so we can wait for a new audio value.
       //we might actually miss a few but since the servo can only move
@@ -195,7 +197,15 @@ void updateMouth() {
       cycleComplete = false;
 
       float jawRatio = jaw / (ADC_COUNT - 1);
+
+      Serial.print(" R: ");
+      Serial.print(jawRatio);
+      
       curMouth = ((MOUTH_OPEN - MOUTH_CLOSED) * jawRatio) + MOUTH_CLOSED;
+
+      Serial.print(" M: ");
+      Serial.print(curMouth);
+      Serial.println();
 
       servoMouth.write(curMouth);
     }
