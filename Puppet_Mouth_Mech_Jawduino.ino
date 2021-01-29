@@ -189,7 +189,10 @@ void detach_servos()
 
 void updateMouth() {
   //check if we're outside a pause window and return to auto control
-  if (autoMouth && curTime - lastManualMouth > PAUSE_MS) {
+  unsigned long mouthTime = curTime - lastManualMouth;
+  Serial.println(mouthTime);
+    
+  if (autoMouth && mouthTime > PAUSE_MS) {
     if (cycleComplete) {
       //make a local copy of the value from the interrupt to prevent "issues"
       uint8_t jaw = jawValue;
