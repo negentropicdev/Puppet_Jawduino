@@ -40,10 +40,12 @@ Servo servoMouth;
 Servo servoNeck;
 
 //Stores the current ADC channel being read
-volatile uint8_t curADC = 0;
+uint8_t curADC = 0;
+
+uint8_t ADCs[ADC_COUNT] = {A0, A1, A2};
 
 //Stores the value of the jaw as the channels are being read
-volatile uint8_t nextJawValue = 0;
+uint8_t nextJawValue = 0;
 
 //REFS1:0 sets to the AVCC voltage ref
   
@@ -55,11 +57,11 @@ const uint8_t admuxDefault = (0 << REFS1) | (1 << REFS0) | (1 << ADLAR);
 
 //This gets set everytime we finish the round of analog inputs
 //means there's a new valid value to read from jawValue
-volatile bool cycleComplete = false;
+bool cycleComplete = false;
 
-volatile uint8_t jawValue = 0;
+uint8_t jawValue = 0;
 
-volatile bool runAnalogs = false;
+bool runAnalogs = false;
 
 //stores the current millis counter each loop iteration
 //this lets the entire loop iteration run at the "same" time
@@ -103,28 +105,6 @@ bool autoNeck = true;
 unsigned long lastManualMouth = 0;
 unsigned long lastManualNeck = 0;
 
-//This is automagically called (when enabled) as soon as ADC finishes a conversion
-ISR(ADC_vect) {
-  //Read just the upper 8 bits (of the 10) of the ADC value
-  uint8_t val = ADCH;
-
-  //check threshold
-  if (val < JAW_LIMIT) {
-    ++nextJawValue;
-  }
-
-  //increment ADC # and check if we've finished
-  if (++curADC == ADC_COUNT) {
-    curADC = 0;
-    jawValue = nextJawValue;
-    nextJawValue = 0;
-    cycleComplete = true;
-  }
-
-  //Set the input to the next pin to read
-  ADMUX = admuxDefault | curADC;
-}
-
 void initAnalog() {
   /* Going to do some specific setup to minimize the number of registers
    *  we have to touch during reads since we don't need much resolution
@@ -134,15 +114,12 @@ void initAnalog() {
 
   //ADEN -> Enable ADC
   
-  //ADIE -> Enable ADC Interrupt
-  // We use the interrupt to constantly cycle through the inputs
-  
   //ADPS# -> Prescaler values that drops 16MHz clock down to 125kHz - divides by 128
   //Conversions take 13 ADC clock cycles so this means about 9600 samples per sec
   // and with 3 channels this is roughly 3kHz that can be run which is WAY
   // faster than the 50Hz servos are typically updated at which means
   // we can add in better processing in the future if we want fancier response.
-  ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+  ADCSRA = (1 << ADEN) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 }
 
 void startAnalog() {
@@ -166,6 +143,7 @@ void attach_servos()
     servoNeck.attach(PIN_NECK); // Pin 4 for Head swivel servo
     servosEnabled = true;
 }
+
 void detach_servos()
 {   // detach the servo objects
     servoMouth.detach();
@@ -215,6 +193,32 @@ void updateNeck() {
   servoNeck.write(neckPos);
 }
 
+void checkAnalogs() {
+  //Reading is still being done while the ADSC bit is set
+  bool stillReading = ADCSRA & (1 << ADSC);
+  
+  if (!stillReading) {
+    //reading is done, store it and start next one
+    nextJawValue += ADCH < JAW_LIMIT;
+
+    //goto next adc channel
+    ++curADC;
+
+    //check if we've made it through all the channels
+    if (curADC == ADC_COUNT) {
+      curADC = 0;
+      jawValue = nextJawValue;
+      cycleComplete = true;
+    }
+
+    //Set Mux to channel to read next
+    ADMUX = admuxDefault | curADC;
+
+    //start ADC conversion
+    ADCSRA |= (1 << ADSC);
+  }
+}
+
 void setup()
 {
   //initialize serial first so we can use it for debugging output
@@ -233,6 +237,10 @@ void setup()
 void loop()
 {
   curTime = millis();
+
+  //analog reading is based on whenever a reading is ready
+  //so we just always call this without time gating
+  checkAnalogs();
 
   //start checking update timing for features.
 
