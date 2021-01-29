@@ -42,8 +42,12 @@ Servo servoNeck;
 //Stores the current ADC channel being read
 volatile uint8_t curADC = 0;
 
+volatile uint8_t vals[ADC_COUNT] = {0, 0, 0};
+
 //Stores the value of the jaw as the channels are being read
 volatile uint8_t nextJawValue = 0;
+
+volatile uint8_t val = 0;
 
 //REFS1:0 sets to the AVCC voltage ref
   
@@ -112,7 +116,8 @@ unsigned long lastManualNeck = 0;
 //This is automagically called (when enabled) as soon as ADC finishes a conversion
 ISR(ADC_vect) {
   //Read just the upper 8 bits (of the 10) of the ADC value
-  uint8_t val = ADCH;
+  val = ADCH;
+  vals[curADC] = val;
 
   //check threshold
   if (val < JAW_LIMIT) {
@@ -129,10 +134,12 @@ ISR(ADC_vect) {
 
   //Set the input to the next pin to read
   ADMUX = admuxDefault | curADC;
+
+  ADCSRA |= (1 << ADSC);
 }
 
 void initAnalog() {
-  Serial.print("Init Analog...");
+  //Serial.print("Init Analog...");
   /* Going to do some specific setup to minimize the number of registers
    *  we have to touch during reads since we don't need much resolution
    *  we're just looking for a threshold (347 -> 86/87)
@@ -151,7 +158,7 @@ void initAnalog() {
   // we can add in better processing in the future if we want fancier response.
   ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
 
-  Serial.println("Done.");
+  //Serial.println("Done.");
 }
 
 void startAnalog() {
@@ -160,7 +167,7 @@ void startAnalog() {
   //set the start conversion bit in the status and control register
   ADCSRA |= (1 << ADSC);
 
-  Serial.println("Analog started.");
+  //Serial.println("Analog started.");
 }
 
 void stopAnalog() {
@@ -170,7 +177,7 @@ void stopAnalog() {
   //disable ADC complete interrupt
   ADCSRA &= ~(1 << ADIE);
 
-  Serial.println("Analog stopped.");
+  //Serial.println("Analog stopped.");
 }
 
 void attach_servos()
@@ -191,14 +198,14 @@ void updateMouth() {
   //check if we're outside a pause window and return to auto control
   unsigned long mouthTime = curTime - lastManualMouth;
   //Serial.println(mouthTime);
-  Serial.println(autoMouth ? "A" : "a");  
+  //Serial.println(autoMouth ? "A" : "a");  
   if (autoMouth && mouthTime > PAUSE_MS) {
-    Serial.println(cycleComplete ? "C" : "c");
+    //Serial.println(cycleComplete ? "C" : "c");
     if (cycleComplete) {
       //make a local copy of the value from the interrupt to prevent "issues"
       uint8_t jaw = jawValue;
-      Serial.print("J: ");
-      Serial.print(jaw);
+      //Serial.print("J: ");
+      //Serial.print(jaw);
 
       //clear the flag so we can wait for a new audio value.
       //we might actually miss a few but since the servo can only move
@@ -208,18 +215,18 @@ void updateMouth() {
 
       float jawRatio = jaw / (ADC_COUNT - 1);
 
-      Serial.print(" R: ");
-      Serial.print(jawRatio);
+      //Serial.print(" R: ");
+      //Serial.print(jawRatio);
       
       curMouth = ((MOUTH_OPEN - MOUTH_CLOSED) * jawRatio) + MOUTH_CLOSED;
 
-      Serial.print(" M: ");
-      Serial.print(curMouth);
-      Serial.println();
-
-      servoMouth.write(curMouth);
+      //Serial.print(" M: ");
+      //Serial.print(curMouth);
+      //Serial.println();
     }
   }
+  
+  servoMouth.write(curMouth);
 }
 
 void updateNeck() {
@@ -287,14 +294,20 @@ void loop()
   if (curTime - lastMouth > periodMouth) {
     lastMouth += periodMouth;
     updateMouth();
-    Serial.println("M");
+
+    for (int i = 0; i < ADC_COUNT; ++i) {
+      uint8_t v = vals[i];
+      Serial.print(v);
+      Serial.print(" ");
+    }
+    Serial.println("");
   }
 
   //next see if it's time to update neck control
   if (curTime - lastNeck > periodNeck) {
     lastNeck += periodNeck;
     updateNeck();
-    Serial.println("N");
+    //Serial.println("N");
   }
 
   if (curTime - lastGaze > periodGaze) {
@@ -346,19 +359,19 @@ void loop()
         break;
 
       case ',': //turn neck left at current speed
-        Serial.println("left");
+        //Serial.println("left");
         neckTarget = NECK_LEFT;
         lastManualNeck = curTime;
         break;
 
       case '.': //turn nect right at current speed
-        Serial.println("right");
+        //Serial.println("right");
         neckTarget = NECK_RIGHT;
         lastManualNeck = curTime;
         break;
 
       case '/': //stop manual neck turning
-        Serial.println("stop");
+        //Serial.println("stop");
         neckTarget = neckPos;
         lastManualNeck = curTime;
         break;
@@ -375,9 +388,9 @@ void loop()
 
       case '@': // set neck to specified angle
         neckTarget = Serial.parseInt();
-        Serial.print("Neck: ");
-        Serial.print(neckTarget);
-        Serial.println("");
+        //Serial.print("Neck: ");
+        //Serial.print(neckTarget);
+        //Serial.println("");
         
         neckPos = neckTarget;
         lastManualNeck = curTime;
