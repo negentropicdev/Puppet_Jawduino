@@ -71,10 +71,16 @@ unsigned long curTime;
 //last* stores the last time that feature was processed
 unsigned long lastMouth;
 unsigned long lastNeck;
+unsigned long lastGaze;
 
 //period* is time in ms between updates of that feature
 unsigned long periodMouth = 20;
 unsigned long periodNeck = 50;
+
+//Gaze is the time between picking a new place to look
+//this will also be randomly changed everytime gaze
+//is updated
+unsigned long periodGaze = 5000;
 
 //For head turning we want to enable speed control and
 //we want to slowly move towards a target over several
@@ -106,6 +112,7 @@ unsigned long lastManualMouth = 0;
 unsigned long lastManualNeck = 0;
 
 void initAnalog() {
+  Serial.print("Init Analog...");
   /* Going to do some specific setup to minimize the number of registers
    *  we have to touch during reads since we don't need much resolution
    *  we're just looking for a threshold (347 -> 86/87)
@@ -193,6 +200,24 @@ void updateNeck() {
   servoNeck.write(neckPos);
 }
 
+void updateGaze() {
+  if (autoNeck && curTime - lastManualNeck > PAUSE_MS) {
+    //this is a bit different since we're expecting to change periodGaze
+    //and we're not looking for precise timing here anyways since it's
+    //pretty long delays as far as the avr is concerned
+    lastGaze = curTime;
+
+    //randomly pick next gaze delay
+    periodGaze = random(15) * 500 + 3000; //3 - 10 seconds in 0.5 second intervals
+
+    //pick movement speed 20-60 deg/sec
+    neckSpeed = random(9) * 5 + 20;
+
+    //pick next angle to look
+    neckTarget = random(NECK_RIGHT - NECK_LEFT) + NECK_LEFT;
+  }
+}
+
 void checkAnalogs() {
   //Reading is still being done while the ADSC bit is set
   bool stillReading = ADCSRA & (1 << ADSC);
@@ -224,6 +249,7 @@ void setup()
   //initialize serial first so we can use it for debugging output
   Serial.begin(115200);
 
+  Serial.println("Starting...");
   initAnalog();
   attach_servos();
 
@@ -254,6 +280,13 @@ void loop()
   if (curTime - lastNeck > periodNeck) {
     lastNeck += periodNeck;
     updateNeck();
+  }
+
+  if (curTime - lastGaze > periodGaze) {
+    //In the other methods we updated timing before calling the method but this
+    //one does it a bit differently given the length of the delays and not wanting
+    //to repeat extended delays when coming off of manual command pause
+    updateGaze();
   }
 
   //lastly we'll look at serial input and see if we're getting any manual commands to run
@@ -298,16 +331,19 @@ void loop()
         break;
 
       case ',': //turn neck left at current speed
+        Serial.println("left");
         neckTarget = NECK_LEFT;
         lastManualNeck = curTime;
         break;
 
       case '.': //turn nect right at current speed
+        Serial.println("right");
         neckTarget = NECK_RIGHT;
         lastManualNeck = curTime;
         break;
 
       case '/': //stop manual neck turning
+        Serial.println("stop");
         neckTarget = neckPos;
         lastManualNeck = curTime;
         break;
@@ -324,6 +360,10 @@ void loop()
 
       case '@': // set neck to specified angle
         neckTarget = Serial.parseInt();
+        Serial.print("Neck: ");
+        Serial.print(neckTarget);
+        Serial.println("");
+        
         neckPos = neckTarget;
         lastManualNeck = curTime;
         break;
