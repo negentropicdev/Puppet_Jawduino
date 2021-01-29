@@ -294,13 +294,6 @@ void loop()
   if (curTime - lastMouth > periodMouth) {
     lastMouth += periodMouth;
     updateMouth();
-
-    for (int i = 0; i < ADC_COUNT; ++i) {
-      uint8_t v = vals[i];
-      Serial.print(v);
-      Serial.print(" ");
-    }
-    Serial.println("");
   }
 
   //next see if it's time to update neck control
