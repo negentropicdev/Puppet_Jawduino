@@ -150,6 +150,8 @@ void initAnalog() {
   // faster than the 50Hz servos are typically updated at which means
   // we can add in better processing in the future if we want fancier response.
   ADCSRA = (1 << ADEN) | (1 << ADIE) | (1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0);
+
+  Serial.println("Done.");
 }
 
 void startAnalog() {
@@ -157,6 +159,8 @@ void startAnalog() {
   
   //set the start conversion bit in the status and control register
   ADCSRA |= (1 << ADSC);
+
+  Serial.println("Analog started.");
 }
 
 void stopAnalog() {
@@ -165,6 +169,8 @@ void stopAnalog() {
 
   //disable ADC complete interrupt
   ADCSRA &= ~(1 << ADIE);
+
+  Serial.println("Analog stopped.");
 }
 
 void attach_servos()
@@ -277,12 +283,14 @@ void loop()
   if (curTime - lastMouth > periodMouth) {
     lastMouth += periodMouth;
     updateMouth();
+    Serial.println("M");
   }
 
   //next see if it's time to update neck control
   if (curTime - lastNeck > periodNeck) {
     lastNeck += periodNeck;
     updateNeck();
+    Serial.println("N");
   }
 
   if (curTime - lastGaze > periodGaze) {
